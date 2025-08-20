@@ -2,8 +2,6 @@
 
 An advanced machine learning-powered fantasy football draft assistant that provides intelligent player projections, real-time draft recommendations, and seamless integration with popular fantasy platforms.
 
-![Draft Interface](https://via.placeholder.com/800x400?text=Fantasy+Football+ML+Draft+System)
-
 ## 🌟 Features
 
 ### 🤖 **Advanced Machine Learning**
