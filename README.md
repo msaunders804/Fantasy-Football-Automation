@@ -1,9 +1,5 @@
 # Fantasy Football ML Draft System 🏈
 
-[![Python](https://img.shields.io/badge/python-v3.8+-blue.svg)](https://www.python.org/downloads/)
-[![Flask](https://img.shields.io/badge/flask-v2.3+-green.svg)](https://flask.palletsprojects.com/)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-
 An advanced machine learning-powered fantasy football draft assistant that provides intelligent player projections, real-time draft recommendations, and seamless integration with popular fantasy platforms.
 
 ![Draft Interface](https://via.placeholder.com/800x400?text=Fantasy+Football+ML+Draft+System)
@@ -124,32 +120,6 @@ Historical Data → Feature Engineering → Model Training → Projections → V
 - **Usage Metrics**: Target share, carry share, snap percentage
 - **Age Adjustments**: Position-specific age curve modeling
 - **Contextual Factors**: Home/away, opponent strength, weather
-
-#### Model Selection
-- **Cross-Validation**: Time-series splits with multiple algorithms
-- **Ensemble Methods**: Combines predictions from multiple models
-- **Position Specialization**: Separate models for each position
-- **Hyperparameter Tuning**: Optimized for fantasy football scoring
-
-## 📁 Project Structure
-
-```
-fantasy-football-automation/
-├── app.py                          # Flask web application
-├── ml_draft_analyzer.py            # Core ML draft system
-├── database_setup.py               # Database configuration
-├── templates/
-│   └── index.html                  # Main web interface
-├── static/                         # CSS, JS, and asset files
-├── data/
-│   ├── player_stats.db            # SQLite database
-│   └── historical/                # Raw data files
-├── models/                        # Trained ML models
-├── tests/                         # Unit tests
-├── requirements.txt               # Python dependencies
-├── .gitignore                     # Git ignore rules
-└── README.md                      # This file
-```
 
 ## 🎯 Accuracy & Performance
 
