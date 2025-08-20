@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fantasy Football ML Draft System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px 0;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .nav-tabs {
+            display: flex;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            margin-bottom: 30px;
+            padding: 5px;
+        }
+
+        .nav-tab {
+            flex: 1;
+            text-align: center;
+            padding: 15px 20px;
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-tab.active {
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .nav-tab:hover {
+            background: rgba(255,255,255,0.15);
+        }
+
+        .tab-content {
+            display: none;
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .card {
+            background: rgba(255,255,255,0.15);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .card h3 {
+            margin-bottom: 15px;
+            color: #ffd700;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-success { background: #4ade80; }
+        .status-warning { background: #fbbf24; }
+        .status-error { background: #ef4444; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .player-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .player-table th,
+        .player-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .player-table th {
+            background: rgba(255,255,255,0.1);
+            font-weight: 600;
+            color: #ffd700;
+        }
+
+        .player-table tbody tr:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .position-tag {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 5px;
+        }
+
+        .pos-QB { background: #8b5cf6; }
+        .pos-RB { background: #10b981; }
+        .pos-WR { background: #3b82f6; }
+        .pos-TE { background: #f59e0b; }
+
+        .tier-tag {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 5px;
+        }
+
+        .tier-ELITE { background: #dc2626; }
+        .tier-TIER1 { background: #ea580c; }
+        .tier-TIER2 { background: #d97706; }
+        .tier-TIER3 { background: #65a30d; }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 6px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 16px;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(255,255,255,0.15);
+        }
+
+        .form-control::placeholder {
+            color: rgba(255,255,255,0.6);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: rgba(34, 197, 94, 0.2);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: #bbf7d0;
+        }
+
+        .alert-error {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #fecaca;
+        }
+
+        .alert-info {
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #bfdbfe;
+        }
+
+        .draft-board {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+
+        .roster-display {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .recommendations {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .player-card {
+            background: rgba(255,255,255,0.15);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .player-card:hover {
+            background: rgba(255,255,255,0.25);
+            transform: translateY(-2px);
+        }
+
+        .player-card.selected {
+            border: 2px solid #ffd700;
+            background: rgba(255, 215, 0, 0.2);
+        }
+
+        .position-filter {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 8px 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            background: transparent;
+            color: #fff;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .filter-btn.active {
+            background: rgba(255,255,255,0.2);
+            border-color: #fff;
+        }
+
+        .draft-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+        }
+
+        .pick-indicator {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #ffd700;
+        }
+
+        .team-needs {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        .need-high { color: #ef4444; }
+        .need-medium { color: #f59e0b; }
+        .need-low { color: #10b981; }
+
+        /* Draft Input System Styles */
+        .draft-mode-selection {
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .draft-mode-selection label {
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 4px;
+            transition: background 0.3s ease;
+        }
+        
+        .draft-mode-selection label:hover {
+            background: rgba(255,255,255,0.1);
+        }
+        
+        #draft-controls {
+            position: sticky;
+            top: 20px;
+        }
+        
+        .manual-input-highlight {
+            border: 2px solid #ffd700 !important;
+            background: rgba(255, 215, 0, 0.1) !important;
+        }
+        
+        .sync-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 6px;
+        }
+        
+        .sync-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #10b981;
+        }
+        
+        .sync-indicator.syncing {
+            background: #f59e0b;
+            animation: pulse 1s infinite;
+        }
+        
+        .sync-indicator.error {
+            background: #ef4444;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 215, 0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .draft-board {
+                grid-template-columns: 1fr;
+            }
+            
+            .nav-tabs {
+                flex-direction: column;
+            }
+            
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏈 Fantasy Football ML Draft System</h1>
+            <p>Advanced machine learning powered draft assistant</p>
+        </div>
+
+        <div class="nav-tabs">
+            <button class="nav-tab active" onclick="showTab('setup')">Setup</button>
+            <button class="nav-tab" onclick="showTab('rankings')">Rankings</button>
+            <button class="nav-tab" onclick="showTab('draft')">Draft</button>
+            <button class="nav-tab" onclick="showTab('settings')">Settings</button>
+        </div>
+
+        <!-- Setup Tab -->
+        <div id="setup" class="tab-content active">
+            <div class="grid">
+                <div class="card">
+                    <h3>System Status</h3>
+                    <div id="system-status">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <p>Checking system status...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Model Training</h3>
+                    <p>Train ML models using historical data to generate accurate projections.</p>
+                    <button id="train-models-btn" class="btn" onclick="trainModels()">
+                        Train Models
+                    </button>
+                    <div id="training-status"></div>
+                </div>
+
+                <div class="card">
+                    <h3>Generate Projections</h3>
+                    <p>Generate 2025 player projections using trained models.</p>
+                    <button id="generate-projections-btn" class="btn" onclick="generateProjections()">
+                        Generate 2025 Projections
+                    </button>
+                    <div id="projections-status"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rankings Tab -->
+        <div id="rankings" class="tab-content">
+            <div class="card">
+                <h3>Player Rankings</h3>
+                
+                <div class="position-filter">
+                    <button class="filter-btn active" onclick="filterPosition('')">All</button>
+                    <button class="filter-btn" onclick="filterPosition('QB')">QB</button>
+                    <button class="filter-btn" onclick="filterPosition('RB')">RB</button>
+                    <button class="filter-btn" onclick="filterPosition('WR')">WR</button>
+                    <button class="filter-btn" onclick="filterPosition('TE')">TE</button>
+                </div>
+
+                <div id="rankings-content">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Load projections first...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Draft Tab -->
+        <div id="draft" class="tab-content">
+            <div id="draft-setup-form" class="card">
+                <h3>Draft Setup</h3>
+                
+                <!-- Draft Mode Selection -->
+                <div class="card" style="margin-bottom: 20px;">
+                    <h4>Select Draft Mode</h4>
+                    <div class="draft-mode-selection">
+                        <label style="display: flex; align-items: center; margin-bottom: 10px;">
+                            <input type="radio" name="draft-mode" value="simulation" checked style="margin-right: 10px;">
+                            <span><strong>Simulation Mode</strong> - CPU opponents make automatic picks</span>
+                        </label>
+                        <label style="display: flex; align-items: center; margin-bottom: 10px;">
+                            <input type="radio" name="draft-mode" value="manual" style="margin-right: 10px;">
+                            <span><strong>Manual Mode</strong> - You enter each pick manually as it happens</span>
+                        </label>
+                        <label style="display: flex; align-items: center; margin-bottom: 10px;">
+                            <input type="radio" name="draft-mode" value="sleeper" style="margin-right: 10px;">
+                            <span><strong>Sleeper Sync</strong> - Automatically sync with your Sleeper draft</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Standard Draft Setup (for simulation and manual) -->
+                <div id="standard-setup">
+                    <div class="grid">
+                        <div class="form-group">
+                            <label for="teams">Number of Teams:</label>
+                            <input type="number" id="teams" class="form-control" value="12" min="8" max="16">
+                        </div>
+                        <div class="form-group">
+                            <label for="my-position">Your Draft Position:</label>
+                            <input type="number" id="my-position" class="form-control" value="1" min="1" max="16">
+                        </div>
+                        <div class="form-group">
+                            <label for="rounds">Number of Rounds:</label>
+                            <input type="number" id="rounds" class="form-control" value="16" min="10" max="20">
+                        </div>
+                        <div class="form-group">
+                            <label for="scoring">Scoring System:</label>
+                            <select id="scoring" class="form-control">
+                                <option value="ppr">PPR (Point Per Reception)</option>
+                                <option value="half_ppr">Half PPR</option>
+                                <option value="std">Standard</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn btn-success" onclick="setupDraft()">Start Draft</button>
+                </div>
+
+                <!-- Sleeper Setup -->
+                <div id="sleeper-setup" style="display: none;">
+                    <div class="alert alert-info">
+                        <strong>Sleeper Integration:</strong> Enter your Sleeper league information to automatically sync draft picks.
+                    </div>
+                    <div class="grid">
+                        <div class="form-group">
+                            <label for="sleeper-league-id">Sleeper League ID:</label>
+                            <input type="text" id="sleeper-league-id" class="form-control" 
+                                   placeholder="e.g., 987654321">
+                            <small style="opacity: 0.8;">Found in your league URL: sleeper.app/leagues/[LEAGUE_ID]</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="sleeper-user-id">Your Sleeper User ID (optional):</label>
+                            <input type="text" id="sleeper-user-id" class="form-control" 
+                                   placeholder="e.g., 123456789">
+                            <small style="opacity: 0.8;">Found in your profile URL or we'll try to detect it</small>
+                        </div>
+                    </div>
+                    <button class="btn btn-success" onclick="setupSleeperDraft()">Connect to Sleeper Draft</button>
+                </div>
+            </div>
+
+            <div id="draft-board" class="draft-board" style="display: none;">
+                <div class="roster-display">
+                    <div id="draft-info" class="draft-info">
+                        <div class="pick-indicator">Round 1, Pick #1</div>
+                        <div>Your Turn</div>
+                    </div>
+
+                    <!-- Draft Controls based on mode -->
+                    <div id="draft-controls" class="card">
+                        <h3>Draft Controls</h3>
+                        
+                        <!-- Manual Input Controls -->
+                        <div id="manual-controls" style="display: none;">
+                            <div class="alert alert-info">
+                                <strong>Manual Mode:</strong> Enter picks as they happen in your real draft
+                            </div>
+                            <div class="form-group">
+                                <label for="manual-player-name">Player Name:</label>
+                                <input type="text" id="manual-player-name" class="form-control" 
+                                       placeholder="e.g., Christian McCaffrey" list="player-suggestions">
+                                <datalist id="player-suggestions"></datalist>
+                            </div>
+                            <div class="form-group">
+                                <label for="manual-team">Team (optional):</label>
+                                <select id="manual-team" class="form-control">
+                                    <option value="">Auto (current pick)</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-warning" onclick="submitManualPick()">Enter This Pick</button>
+                        </div>
+
+                        <!-- Sleeper Sync Controls -->
+                        <div id="sleeper-controls" style="display: none;">
+                            <div class="alert alert-success">
+                                <strong>Sleeper Connected:</strong> <span id="sleeper-league-name">League Name</span>
+                            </div>
+                            <button class="btn btn-success" onclick="syncSleeperPicks()">🔄 Sync Latest Picks</button>
+                            <div style="margin-top: 10px;">
+                                <small>Last sync: <span id="last-sync-time">Never</span></small>
+                            </div>
+                            
+                            <!-- Auto-sync toggle -->
+                            <label style="display: flex; align-items: center; margin-top: 15px;">
+                                <input type="checkbox" id="auto-sync" style="margin-right: 8px;">
+                                Auto-sync every 30 seconds
+                            </label>
+                        </div>
+
+                        <!-- Simulation Controls -->
+                        <div id="simulation-controls">
+                            <div class="alert alert-info">
+                                <strong>Simulation Mode:</strong> CPU opponents will make picks automatically
+                            </div>
+                        </div>
+
+                        <!-- Common Controls -->
+                        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);">
+                            <button class="btn" onclick="undoLastPick()" style="background: #f59e0b;">↩️ Undo Last Pick</button>
+                            <button class="btn btn-danger" onclick="resetDraft()" style="margin-left: 10px;">🔄 Reset Draft</button>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>Your Roster</h3>
+                        <div id="my-roster">
+                            <!-- Roster will be populated here -->
+                        </div>
+                        
+                        <div class="team-needs">
+                            <h4>Team Needs</h4>
+                            <div id="team-needs">
+                                <!-- Needs analysis will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="recommendations">
+                    <div class="card">
+                        <h3>Draft Recommendations</h3>
+                        <div id="draft-recommendations">
+                            <!-- Recommendations will be populated here -->
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>Available Players</h3>
+                        <div class="form-group">
+                            <input type="text" id="player-search" class="form-control" 
+                                   placeholder="Search players..." onkeyup="searchPlayers()">
+                        </div>
+                        <div class="position-filter">
+                            <button class="filter-btn active" onclick="filterAvailablePlayers('')">All</button>
+                            <button class="filter-btn" onclick="filterAvailablePlayers('QB')">QB</button>
+                            <button class="filter-btn" onclick="filterAvailablePlayers('RB')">RB</button>
+                            <button class="filter-btn" onclick="filterAvailablePlayers('WR')">WR</button>
+                            <button class="filter-btn" onclick="filterAvailablePlayers('TE')">TE</button>
+                        </div>
+                        <div id="available-players">
+                            <!-- Available players will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="settings" class="tab-content">
+            <div class="card">
+                <h3>League Settings</h3>
+                <div class="grid">
+                    <div class="form-group">
+                        <label for="settings-teams">Number of Teams:</label>
+                        <input type="number" id="settings-teams" class="form-control" value="12" min="8" max="16">
+                    </div>
+                    <div class="form-group">
+                        <label for="settings-scoring">Scoring System:</label>
+                        <select id="settings-scoring" class="form-control">
+                            <option value="ppr">PPR (Point Per Reception)</option>
+                            <option value="half_ppr">Half PPR</option>
+                            <option value="std">Standard</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="btn" onclick="updateSettings()">Update Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentPosition = '';
+        let selectedPlayer = null;
+        let draftActive = false;
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            checkSystemStatus();
+            
+            // Handle draft mode changes
+            const draftModeRadios = document.querySelectorAll('input[name="draft-mode"]');
+            draftModeRadios.forEach(radio => {
+                radio.addEventListener('change', handleDraftModeChange);
+            });
+        });
+
+        // Handle draft mode changes
+        function handleDraftModeChange() {
+            const selectedMode = document.querySelector('input[name="draft-mode"]:checked').value;
+            
+            // Show/hide setup forms
+            if (selectedMode === 'sleeper') {
+                document.getElementById('standard-setup').style.display = 'none';
+                document.getElementById('sleeper-setup').style.display = 'block';
+            } else {
+                document.getElementById('standard-setup').style.display = 'block';
+                document.getElementById('sleeper-setup').style.display = 'none';
+            }
+            
+            // Set draft mode on server
+            fetch('/api/draft-mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: selectedMode })
+            });
+        }
+
+        // Tab switching
+        function showTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all nav tabs
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab and mark nav tab as active
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+
+            // Load tab-specific data
+            if (tabName === 'rankings') {
+                loadRankings();
+            } else if (tabName === 'draft') {
+                checkDraftStatus();
+            }
+        }
+
+        // System status check
+        async function checkSystemStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                const statusDiv = document.getElementById('system-status');
+                let statusHtml = '';
+                
+                statusHtml += `<div><span class="status-indicator ${data.system_initialized ? 'status-success' : 'status-error'}"></span>System Initialized: ${data.system_initialized ? 'Yes' : 'No'}</div>`;
+                statusHtml += `<div><span class="status-indicator ${data.models_trained ? 'status-success' : 'status-warning'}"></span>Models Trained: ${data.models_trained ? 'Yes' : 'No'}</div>`;
+                statusHtml += `<div><span class="status-indicator ${data.projections_ready ? 'status-success' : 'status-warning'}"></span>Projections Ready: ${data.projections_ready ? 'Yes' : 'No'}</div>`;
+                
+                statusDiv.innerHTML = statusHtml;
+                
+                // Update button states
+                document.getElementById('train-models-btn').disabled = !data.system_initialized;
+                document.getElementById('generate-projections-btn').disabled = !data.models_trained;
+                
+            } catch (error) {
+                console.error('Error checking system status:', error);
+                document.getElementById('system-status').innerHTML = '<div class="alert alert-error">Error checking system status</div>';
+            }
+        }
+
+        // Train models
+        async function trainModels() {
+            const btn = document.getElementById('train-models-btn');
+            const statusDiv = document.getElementById('training-status');
+            
+            btn.disabled = true;
+            btn.textContent = 'Training...';
+            statusDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>Training ML models...</p></div>';
+            
+            try {
+                const response = await fetch('/api/train-models', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                    checkSystemStatus(); // Refresh status
+                } else {
+                    statusDiv.innerHTML = `<div class="alert alert-error">Error: ${data.error}</div>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="alert alert-error">Error: ${error.message}</div>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Train Models';
+            }
+        }
+
+        // Generate projections
+        async function generateProjections() {
+            const btn = document.getElementById('generate-projections-btn');
+            const statusDiv = document.getElementById('projections-status');
+            
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            statusDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>Generating 2025 projections...</p></div>';
+            
+            try {
+                const response = await fetch('/api/generate-projections', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                    checkSystemStatus(); // Refresh status
+                } else {
+                    statusDiv.innerHTML = `<div class="alert alert-error">Error: ${data.error}</div>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="alert alert-error">Error: ${error.message}</div>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate 2025 Projections';
+            }
+        }
+
+        // Load rankings
+        async function loadRankings() {
+            const contentDiv = document.getElementById('rankings-content');
+            contentDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading rankings...</p></div>';
+            
+            try {
+                const response = await fetch(`/api/rankings?position=${currentPosition}`);
+                const data = await response.json();
+                
+                if (data.players && data.players.length > 0) {
+                    let html = '<table class="player-table"><thead><tr>';
+                    html += '<th>Rank</th><th>Player</th><th>Pos</th><th>Team</th><th>Projected</th><th>VBD</th><th>Tier</th>';
+                    html += '</tr></thead><tbody>';
+                    
+                    data.players.forEach(player => {
+                        html += `<tr>
+                            <td>${player.overall_rank}</td>
+                            <td>${player.name}</td>
+                            <td><span class="position-tag pos-${player.position}">${player.position}</span></td>
+                            <td>${player.team}</td>
+                            <td>${player.projected_points.toFixed(1)}</td>
+                            <td>${player.vbd_score.toFixed(1)}</td>
+                            <td><span class="tier-tag tier-${player.tier.replace(' ', '')}">${player.tier}</span></td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table>';
+                    contentDiv.innerHTML = html;
+                } else {
+                    contentDiv.innerHTML = '<div class="alert alert-info">No rankings available. Generate projections first.</div>';
+                }
+            } catch (error) {
+                contentDiv.innerHTML = '<div class="alert alert-error">Error loading rankings</div>';
+            }
+        }
+
+        // Filter rankings by position
+        function filterPosition(position) {
+            currentPosition = position;
+            
+            // Update filter buttons
+            document.querySelectorAll('.position-filter .filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            loadRankings();
+        }
+
+        // Setup draft
+        async function setupDraft() {
+            const mode = document.querySelector('input[name="draft-mode"]:checked').value;
+            
+            const teams = document.getElementById('teams').value;
+            const myPosition = document.getElementById('my-position').value;
+            const rounds = document.getElementById('rounds').value;
+            const scoring = document.getElementById('scoring').value;
+            
+            try {
+                const response = await fetch('/api/setup-draft', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        teams: parseInt(teams),
+                        my_position: parseInt(myPosition),
+                        rounds: parseInt(rounds),
+                        scoring: scoring
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('draft-setup-form').style.display = 'none';
+                    document.getElementById('draft-board').style.display = 'block';
+                    draftActive = true;
+                    showDraftControls(mode);
+                    updateDraftBoard();
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        // Setup Sleeper draft
+        async function setupSleeperDraft() {
+            const leagueId = document.getElementById('sleeper-league-id').value.trim();
+            const userId = document.getElementById('sleeper-user-id').value.trim();
+            
+            if (!leagueId) {
+                alert('Please enter your Sleeper League ID');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/sleeper-setup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        league_id: leagueId,
+                        user_id: userId || null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('draft-setup-form').style.display = 'none';
+                    document.getElementById('draft-board').style.display = 'block';
+                    document.getElementById('sleeper-league-name').textContent = data.league_name;
+                    showDraftControls('sleeper');
+                    updateDraftBoard();
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        // Show appropriate draft controls based on mode
+        function showDraftControls(mode) {
+            // Hide all control sections
+            document.getElementById('manual-controls').style.display = 'none';
+            document.getElementById('sleeper-controls').style.display = 'none';
+            document.getElementById('simulation-controls').style.display = 'none';
+            
+            // Show relevant controls
+            if (mode === 'manual') {
+                document.getElementById('manual-controls').style.display = 'block';
+                populateTeamDropdown();
+                setupPlayerSuggestions();
+            } else if (mode === 'sleeper') {
+                document.getElementById('sleeper-controls').style.display = 'block';
+                setupAutoSync();
+            } else {
+                document.getElementById('simulation-controls').style.display = 'block';
+            }
+        }
+
+        // Populate team dropdown for manual mode
+        function populateTeamDropdown() {
+            const teamSelect = document.getElementById('manual-team');
+            const teams = parseInt(document.getElementById('teams').value) || 12;
+            
+            // Clear existing options except first
+            teamSelect.innerHTML = '<option value="">Auto (current pick)</option>';
+            
+            for (let i = 1; i <= teams; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = `Team ${i}`;
+                teamSelect.appendChild(option);
+            }
+        }
+
+        // Setup player name suggestions
+        async function setupPlayerSuggestions() {
+            try {
+                const response = await fetch('/api/available-players?limit=100');
+                const data = await response.json();
+                
+                const datalist = document.getElementById('player-suggestions');
+                datalist.innerHTML = '';
+                
+                data.players.forEach(player => {
+                    const option = document.createElement('option');
+                    option.value = player.name;
+                    datalist.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading player suggestions:', error);
+            }
+        }
+
+        // Submit manual pick
+        async function submitManualPick() {
+            const playerName = document.getElementById('manual-player-name').value.trim();
+            const teamPosition = document.getElementById('manual-team').value;
+            
+            if (!playerName) {
+                alert('Please enter a player name');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/manual-draft-pick', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        player_name: playerName,
+                        team_position: teamPosition ? parseInt(teamPosition) : null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('manual-player-name').value = '';
+                    updateDraftBoard();
+                    setupPlayerSuggestions(); // Refresh suggestions
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        // Sync with Sleeper
+        async function syncSleeperPicks() {
+            const draftId = sessionStorage.getItem('sleeper_draft_id');
+            
+            try {
+                const response = await fetch('/api/sleeper-sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ draft_id: draftId })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('last-sync-time').textContent = new Date().toLocaleTimeString();
+                    updateDraftBoard();
+                    
+                    // Show success message
+                    const notification = document.createElement('div');
+                    notification.className = 'alert alert-success';
+                    notification.textContent = data.message;
+                    notification.style.position = 'fixed';
+                    notification.style.top = '20px';
+                    notification.style.right = '20px';
+                    notification.style.zIndex = '1000';
+                    document.body.appendChild(notification);
+                    
+                    setTimeout(() => notification.remove(), 3000);
+                } else {
+                    alert(`Sync error: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Sync error: ${error.message}`);
+            }
+        }
+
+        // Setup auto-sync
+        function setupAutoSync() {
+            const autoSyncCheckbox = document.getElementById('auto-sync');
+            let autoSyncInterval;
+            
+            autoSyncCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    autoSyncInterval = setInterval(syncSleeperPicks, 30000); // Every 30 seconds
+                } else {
+                    if (autoSyncInterval) {
+                        clearInterval(autoSyncInterval);
+                    }
+                }
+            });
+        }
+
+        // Undo last pick
+        async function undoLastPick() {
+            if (!confirm('Are you sure you want to undo the last pick?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/undo-pick', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateDraftBoard();
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        // Reset draft
+        async function resetDraft() {
+            if (!confirm('Are you sure you want to reset the entire draft? This cannot be undone.')) {
+                return;
+            }
+            
+            try {
+                // Clear session storage
+                sessionStorage.clear();
+                
+                // Reload the page to reset everything
+                window.location.reload();
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        // Check draft status
+        async function checkDraftStatus() {
+            try {
+                const response = await fetch('/api/draft-status');
+                const data = await response.json();
+                
+                if (data.current_pick) {
+                    document.getElementById('draft-setup-form').style.display = 'none';
+                    document.getElementById('draft-board').style.display = 'block';
+                    draftActive = true;
+                    updateDraftBoard();
+                }
+            } catch (error) {
+                // Draft not active, show setup form
+                document.getElementById('draft-setup-form').style.display = 'block';
+                document.getElementById('draft-board').style.display = 'none';
+            }
+        }
+
+        // Update draft board
+        async function updateDraftBoard() {
+            try {
+                const [statusResponse, recommendationsResponse] = await Promise.all([
+                    fetch('/api/draft-status'),
+                    fetch('/api/draft-recommendations')
+                ]);
+                
+                const statusData = await statusResponse.json();
+                const recommendationsData = await recommendationsResponse.json();
+                
+                // Update draft info
+                const draftInfo = document.getElementById('draft-info');
+                draftInfo.innerHTML = `
+                    <div class="pick-indicator">Round ${statusData.current_round}, Pick #${statusData.current_pick}</div>
+                    <div>${statusData.is_my_pick ? 'YOUR TURN' : `Team ${statusData.current_team}'s Turn`}</div>
+                `;
+                
+                // Update roster
+                updateRosterDisplay(statusData.my_roster);
+                
+                // Update team needs
+                updateTeamNeeds(statusData.team_analysis);
+                
+                // Update recommendations
+                updateRecommendations(recommendationsData.recommendations, statusData.is_my_pick);
+                
+                // Load available players
+                loadAvailablePlayers();
+                
+                // Handle different modes for non-user picks
+                const currentMode = document.querySelector('input[name="draft-mode"]:checked')?.value || 'simulation';
+                
+                if (!statusData.is_my_pick && !statusData.draft_complete) {
+                    if (currentMode === 'simulation') {
+                        // Auto-advance CPU picks in simulation mode
+                        setTimeout(processCPUPick, 2000);
+                    } else if (currentMode === 'manual') {
+                        // In manual mode, highlight that manual input is needed
+                        highlightManualInputNeeded();
+                    }
+                    // In Sleeper mode, we rely on manual sync or auto-sync
+                }
+                
+            } catch (error) {
+                console.error('Error updating draft board:', error);
+            }
+        }
+
+        // Highlight when manual input is needed
+        function highlightManualInputNeeded() {
+            const manualControls = document.getElementById('manual-controls');
+            if (manualControls && manualControls.style.display !== 'none') {
+                manualControls.style.border = '2px solid #ffd700';
+                manualControls.style.backgroundColor = 'rgba(255, 215, 0, 0.1)';
+                
+                // Add a pulsing effect
+                manualControls.style.animation = 'pulse 2s infinite';
+                
+                // Remove highlight after user makes an entry
+                const playerNameInput = document.getElementById('manual-player-name');
+                const removeHighlight = () => {
+                    manualControls.style.border = '';
+                    manualControls.style.backgroundColor = '';
+                    manualControls.style.animation = '';
+                    playerNameInput.removeEventListener('focus', removeHighlight);
+                };
+                playerNameInput.addEventListener('focus', removeHighlight);
+            }
+        }
+
+        // Update roster display
+        function updateRosterDisplay(roster) {
+            const rosterDiv = document.getElementById('my-roster');
+            let html = '';
+            
+            const positions = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+            positions.forEach(pos => {
+                const players = roster[pos] || [];
+                html += `<div class="roster-position">
+                    <h4>${pos} (${players.length})</h4>`;
+                
+                if (players.length > 0) {
+                    players.forEach(player => {
+                        html += `<div class="roster-player">
+                            ${player.name} (${player.team}) - ${player.projected_points.toFixed(1)} pts
+                        </div>`;
+                    });
+                } else {
+                    html += '<div class="roster-empty">Empty</div>';
+                }
+                html += '</div>';
+            });
+            
+            rosterDiv.innerHTML = html;
+        }
+
+        // Update team needs
+        function updateTeamNeeds(analysis) {
+            const needsDiv = document.getElementById('team-needs');
+            let html = `<div>Strategy: ${analysis.strategy_recommendation}</div>`;
+            
+            Object.entries(analysis.positional_needs).forEach(([pos, need]) => {
+                if (need > 0) {
+                    html += `<div class="need-high">Need ${need} ${pos}</div>`;
+                }
+            });
+            
+            needsDiv.innerHTML = html;
+        }
+
+        // Update recommendations
+        function updateRecommendations(recommendations, isMyPick) {
+            const recDiv = document.getElementById('draft-recommendations');
+            
+            if (!isMyPick) {
+                recDiv.innerHTML = '<p>Waiting for other team to pick...</p>';
+                return;
+            }
+            
+            let html = '';
+            recommendations.forEach((player, index) => {
+                html += `<div class="player-card" onclick="selectPlayerToDraft('${player.player_id}')">
+                    <div style="display: flex; justify-content: space-between;">
+                        <div>
+                            <strong>${player.name}</strong>
+                            <span class="position-tag pos-${player.position}">${player.position}</span>
+                            <span class="tier-tag tier-${player.tier.replace(' ', '')}">${player.tier}</span>
+                        </div>
+                        <div>
+                            <div>${player.projected_points.toFixed(1)} pts</div>
+                            <div style="font-size: 0.9em; opacity: 0.8;">${player.recommendation_type}</div>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            
+            recDiv.innerHTML = html;
+        }
+
+        // Load available players
+        async function loadAvailablePlayers() {
+            try {
+                const response = await fetch('/api/available-players?limit=20');
+                const data = await response.json();
+                
+                const playersDiv = document.getElementById('available-players');
+                let html = '';
+                
+                data.players.forEach(player => {
+                    html += `<div class="player-card" onclick="selectPlayerToDraft('${player.player_id}')">
+                        <div style="display: flex; justify-content: space-between;">
+                            <div>
+                                <strong>${player.name}</strong>
+                                <span class="position-tag pos-${player.position}">${player.position}</span>
+                            </div>
+                            <div>${player.projected_points.toFixed(1)} pts</div>
+                        </div>
+                    </div>`;
+                });
+                
+                playersDiv.innerHTML = html;
+            } catch (error) {
+                console.error('Error loading available players:', error);
+            }
+        }
+
+        // Select player to draft
+        function selectPlayerToDraft(playerId) {
+            // Remove previous selection
+            document.querySelectorAll('.player-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            // Add selection to clicked card
+            event.currentTarget.classList.add('selected');
+            selectedPlayer = playerId;
+            
+            // Show draft button
+            if (!document.getElementById('draft-player-btn')) {
+                const btn = document.createElement('button');
+                btn.id = 'draft-player-btn';
+                btn.className = 'btn btn-success';
+                btn.textContent = 'Draft This Player';
+                btn.onclick = draftSelectedPlayer;
+                document.getElementById('draft-recommendations').appendChild(btn);
+            }
+        }
+
+        // Draft selected player
+        async function draftSelectedPlayer() {
+            if (!selectedPlayer) return;
+            
+            try {
+                const response = await fetch('/api/draft-player', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ player_id: selectedPlayer })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    selectedPlayer = null;
+                    document.getElementById('draft-player-btn')?.remove();
+                    updateDraftBoard();
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        // Process CPU pick
+        async function processCPUPick() {
+            try {
+                const response = await fetch('/api/simulate-cpu-pick', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Show CPU pick notification
+                    const notification = document.createElement('div');
+                    notification.className = 'alert alert-info';
+                    notification.textContent = `Team ${data.team} drafted ${data.player.name} (${data.player.position})`;
+                    document.querySelector('.draft-board').prepend(notification);
+                    
+                    setTimeout(() => notification.remove(), 3000);
+                    
+                    updateDraftBoard();
+                }
+            } catch (error) {
+                console.error('Error processing CPU pick:', error);
+            }
+        }
+
+        // Filter available players
+        function filterAvailablePlayers(position) {
+            // Update filter buttons
+            document.querySelectorAll('#draft .position-filter .filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // TODO: Implement filtering logic
+        }
+
+        // Search players
+        function searchPlayers() {
+            const search = document.getElementById('player-search').value;
+            // TODO: Implement search logic
+        }
+
+        // Enhanced player search for manual mode
+        document.addEventListener('DOMContentLoaded', function() {
+            const manualPlayerInput = document.getElementById('manual-player-name');
+            if (manualPlayerInput) {
+                manualPlayerInput.addEventListener('input', function(e) {
+                    const query = e.target.value.toLowerCase();
+                    const suggestions = document.getElementById('player-suggestions');
+                    
+                    if (query.length >= 2) {
+                        // Filter suggestions based on input
+                        fetch(`/api/available-players?search=${encodeURIComponent(query)}&limit=20`)
+                            .then(response => response.json())
+                            .then(data => {
+                                suggestions.innerHTML = '';
+                                data.players.forEach(player => {
+                                    const option = document.createElement('option');
+                                    option.value = `${player.name} (${player.position}, ${player.team})`;
+                                    suggestions.appendChild(option);
+                                });
+                            })
+                            .catch(console.error);
+                    }
+                });
+            }
+        });
+
+        // Add keyboard shortcuts for faster manual entry
+        document.addEventListener('keydown', function(e) {
+            // Only if manual mode is active and not typing in other inputs
+            const manualControls = document.getElementById('manual-controls');
+            const isManualMode = manualControls && manualControls.style.display !== 'none';
+            const isTypingInInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
+            
+            if (isManualMode && !isTypingInInput) {
+                switch(e.key) {
+                    case 'Enter':
+                        e.preventDefault();
+                        submitManualPick();
+                        break;
+                    case 'Escape':
+                        e.preventDefault();
+                        document.getElementById('manual-player-name').value = '';
+                        document.getElementById('manual-player-name').focus();
+                        break;
+                    case '/':
+                        e.preventDefault();
+                        document.getElementById('manual-player-name').focus();
+                        break;
+                }
+            }
+        });
+
+        // Update settings
+        async function updateSettings() {
+            const teams = document.getElementById('settings-teams').value;
+            const scoring = document.getElementById('settings-scoring').value;
+            
+            try {
+                const response = await fetch('/api/league-settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        teams: parseInt(teams),
+                        scoring: scoring
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('Settings updated successfully!');
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html>
