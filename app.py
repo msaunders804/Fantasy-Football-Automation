@@ -996,7 +996,6 @@ def sync_sleeper_picks(sleeper_picks):
     global draft_system
     
     synced_count = 0
-    
     try:
         # Sort picks by pick number
         sorted_picks = sorted(sleeper_picks, key=lambda x: x.get('pick_no', 0))
