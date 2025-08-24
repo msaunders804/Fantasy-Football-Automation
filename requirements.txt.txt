@@ -1,0 +1,65 @@
+# Fantasy Football Automation - Requirements
+# Core Web Framework
+Flask==3.0.0
+Werkzeug==3.0.1
+Jinja2==3.1.2
+MarkupSafe==2.1.3
+itsdangerous==2.1.2
+click==8.1.7
+
+# Data Processing & Analysis
+pandas==2.1.4
+numpy==1.25.2
+scipy==1.11.4
+
+# Machine Learning
+scikit-learn==1.3.2
+xgboost==2.0.3
+joblib==1.3.2
+
+# Database
+SQLAlchemy==2.0.23
+sqlite3==3.41.2  # Usually built into Python, but included for clarity
+
+# HTTP Requests & API Integration
+requests==2.31.0
+urllib3==2.1.0
+
+# Data Visualization (for analysis and charts)
+matplotlib==3.8.2
+seaborn==0.13.0
+plotly==5.17.0
+
+# Web Scraping (if needed for data collection)
+beautifulsoup4==4.12.2
+lxml==4.9.3
+
+# Date/Time Handling
+python-dateutil==2.8.2
+pytz==2023.3
+
+# Configuration & Environment
+python-dotenv==1.0.0
+
+# Utilities
+openpyxl==3.1.2  # For Excel file handling
+tqdm==4.66.1     # Progress bars for data processing
+
+# Optional: Development Tools (uncomment if needed)
+# pytest==7.4.3
+# black==23.11.0
+# flake8==6.1.0
+# mypy==1.7.1
+
+# Optional: Production Server (uncomment for deployment)
+# gunicorn==21.2.0
+# waitress==2.1.2
+
+# Optional: Caching (uncomment if implementing caching)
+# redis==5.0.1
+# flask-caching==2.1.0
+
+# Version constraints for security
+certifi>=2023.7.22
+charset-normalizer>=3.0.0
+idna>=3.4
