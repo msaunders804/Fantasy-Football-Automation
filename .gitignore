@@ -1,8 +1,12 @@
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+
+# C extensions
 *.so
+
+# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -16,42 +20,102 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# Virtual Environment
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Virtual environments
 venv/
 env/
 ENV/
+env.bak/
+venv.bak/
 .venv/
-
-# Flask
-instance/
-.webassets-cache
-
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-
-# IDE
-.vscode/settings.json
-.vscode/launch.json
-.idea/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
 
 # Environment variables
 .env
 .env.local
 .env.production
+.env.staging
 
-# Temporary files
-*.tmp
-*.temp
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Database files
+*.db
+*.sqlite3
+instance/
+
+# Machine Learning models (large files)
+models/trained/*.pkl
+models/trained/*.joblib
+models/trained/*.h5
+
+# Data files (add specific patterns if needed)
+data/raw/*.csv
+data/processed/*.csv
+data/external/*.json
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# Flask instance folder
+instance/
+
+# Scraped data cache
+cache/
+temp/
+
+# API keys and secrets (backup check)
+*secret*
+*key*
+*token*
+config_local.py
+
+# OS generated files
+.fseventsd
+.VolumeIcon.icns

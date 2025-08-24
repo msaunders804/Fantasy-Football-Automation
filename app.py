@@ -5,6 +5,7 @@ from datetime import datetime
 import traceback
 import os
 import sys
+import uuid
 
 # Import your existing ML system
 try:
@@ -13,8 +14,17 @@ except ImportError:
     print("Error: Could not import AdvancedMLDraftSystem. Make sure the file is in the same directory.")
     sys.exit(1)
 
+# NEW: Import chatbot dependencies
+from dotenv import load_dotenv
+import anthropic
+import sqlite3
+
+# NEW: Load environment variables
+load_dotenv()
+
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-change-this-in-production'
+# NEW: Use environment variable for secret key
+app.secret_key = os.getenv('SECRET_KEY', 'your-secret-key-change-this-in-production')
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -22,6 +32,19 @@ logger = logging.getLogger(__name__)
 
 # Global draft system instance
 draft_system = None
+
+# NEW: Initialize Claude client
+claude_client = None
+if os.getenv('ANTHROPIC_API_KEY'):
+    try:
+        claude_client = anthropic.Anthropic(
+            api_key=os.getenv('ANTHROPIC_API_KEY')
+        )
+        logger.info("Claude API client initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize Claude API client: {e}")
+else:
+    logger.warning("ANTHROPIC_API_KEY not found - AI Advisor features will be disabled")
 
 def initialize_draft_system():
     """Initialize the draft system"""
@@ -34,11 +57,322 @@ def initialize_draft_system():
         logger.error(f"Failed to initialize draft system: {e}")
         return False
 
+# NEW: Initialize chat database
+def init_chat_db():
+    """Initialize chat database tables"""
+    conn = sqlite3.connect('fantasy_chat.db')
+    cursor = conn.cursor()
+    
+    # Create chat sessions table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS chat_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT UNIQUE NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Create chat messages table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (session_id) REFERENCES chat_sessions (session_id)
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+
+# NEW: Initialize chat database on startup
+init_chat_db()
+
 @app.route('/')
 def home():
     """Home page"""
     return render_template('index.html')
 
+# NEW: AI Advice page
+@app.route('/advice')
+def advice():
+    """Render the advice/chat page"""
+    if not claude_client:
+        return render_template('error.html', error='AI Advisor not available - API key not configured'), 503
+    
+    if 'chat_session_id' not in session:
+        session['chat_session_id'] = str(uuid.uuid4())
+        
+        # Create new chat session in database
+        conn = sqlite3.connect('fantasy_chat.db')
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO chat_sessions (session_id) VALUES (?)",
+            (session['chat_session_id'],)
+        )
+        conn.commit()
+        conn.close()
+    
+    return render_template('advice.html')
+
+# NEW: Chat API endpoints
+@app.route('/api/chat/history')
+def get_chat_history():
+    """Get chat history for current session"""
+    if 'chat_session_id' not in session:
+        return jsonify({'messages': []})
+    
+    conn = sqlite3.connect('fantasy_chat.db')
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT role, content, timestamp FROM chat_messages WHERE session_id = ? ORDER BY timestamp",
+        (session['chat_session_id'],)
+    )
+    
+    messages = []
+    for row in cursor.fetchall():
+        messages.append({
+            'role': row[0],
+            'content': row[1],
+            'timestamp': row[2]
+        })
+    
+    conn.close()
+    return jsonify({'messages': messages})
+
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    """Handle chat messages with Claude API"""
+    if not claude_client:
+        return jsonify({'error': 'AI Advisor not available'}), 503
+    
+    try:
+        data = request.get_json()
+        user_message = data.get('message', '').strip()
+        
+        if not user_message:
+            return jsonify({'error': 'Empty message'}), 400
+        
+        if 'chat_session_id' not in session:
+            return jsonify({'error': 'No chat session'}), 400
+        
+        session_id = session['chat_session_id']
+        
+        # Store user message
+        conn = sqlite3.connect('fantasy_chat.db')
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO chat_messages (session_id, role, content) VALUES (?, ?, ?)",
+            (session_id, 'user', user_message)
+        )
+        conn.commit()
+        
+        # Get recent chat history for context
+        cursor.execute(
+            "SELECT role, content FROM chat_messages WHERE session_id = ? ORDER BY timestamp DESC LIMIT 10",
+            (session_id,)
+        )
+        recent_messages = cursor.fetchall()[::-1]  # Reverse to get chronological order
+        conn.close()
+        
+        # Build context for Claude using existing draft system data
+        context = get_fantasy_context()
+        system_prompt = build_system_prompt(context)
+        
+        # Prepare messages for Claude
+        claude_messages = []
+        for role, content in recent_messages[:-1]:  # Exclude the current user message
+            claude_messages.append({
+                "role": "user" if role == "user" else "assistant",
+                "content": content
+            })
+        
+        # Add current user message
+        claude_messages.append({
+            "role": "user",
+            "content": user_message
+        })
+        
+        # Call Claude API
+        response = claude_client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=1024,
+            temperature=0.7,
+            system=system_prompt,
+            messages=claude_messages
+        )
+        
+        claude_response = response.content[0].text
+        
+        # Store Claude's response
+        conn = sqlite3.connect('fantasy_chat.db')
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO chat_messages (session_id, role, content) VALUES (?, ?, ?)",
+            (session_id, 'assistant', claude_response)
+        )
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'response': claude_response,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except anthropic.APIError as e:
+        return jsonify({'error': f'Claude API error: {str(e)}'}), 500
+    except Exception as e:
+        logger.error(f"Chat error: {e}")
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+def get_fantasy_context():
+    """Get relevant fantasy football context using existing draft system data"""
+    global draft_system
+    
+    context = {}
+    
+    if draft_system:
+        # Use existing league settings
+        context['league_settings'] = draft_system.league_settings
+        
+        # Get current draft status if active
+        if session.get('draft_active'):
+            context['draft_active'] = True
+            context['current_round'] = getattr(draft_system, 'current_round', 1)
+            context['current_pick'] = getattr(draft_system, 'current_pick', 1)
+            context['my_roster'] = getattr(draft_system, 'my_roster', {})
+            
+            # Get team analysis
+            try:
+                analysis = draft_system.analyze_team_composition()
+                context['team_analysis'] = analysis
+            except:
+                pass
+            
+            # Get upcoming picks
+            try:
+                my_picks = draft_system._get_my_upcoming_picks()
+                context['upcoming_picks'] = my_picks[:3]  # Next 3 picks
+            except:
+                pass
+        
+        # Get available players (top recommendations)
+        if hasattr(draft_system, 'available_players') and draft_system.available_players:
+            # Get top 20 available players
+            available = draft_system.available_players[:20]
+            context['top_available'] = [
+                f"{p['name']} ({p['position']}) - {p.get('projected_points', 0):.1f} proj, VBD: {p.get('vbd_score', 0):.1f}" 
+                for p in available
+            ]
+        
+        # Check if models are trained
+        context['models_trained'] = len(draft_system.models) > 0 if hasattr(draft_system, 'models') else False
+        context['projections_ready'] = len(draft_system.available_players) > 0 if hasattr(draft_system, 'available_players') else False
+    
+    return context
+
+def build_system_prompt(context):
+    """Build system prompt with fantasy football context from existing system"""
+    prompt = """You are an expert fantasy football advisor with deep knowledge of NFL players, statistics, and strategy. 
+
+Your role is to provide actionable, data-driven advice for fantasy football decisions including:
+- Lineup optimization (start/sit decisions)
+- Waiver wire pickups and drops
+- Trade analysis and recommendations
+- Draft strategy and player rankings
+- Injury impact analysis
+- Matchup analysis
+
+Current Context:
+"""
+    
+    # Add league settings if available
+    if context.get('league_settings'):
+        settings = context['league_settings']
+        prompt += f"- League Settings: {settings.get('teams', 12)} teams, {settings.get('scoring', 'PPR')} scoring\n"
+        
+        roster_spots = settings.get('roster_spots', {})
+        if roster_spots:
+            prompt += f"- Roster Requirements: {roster_spots}\n"
+    
+    # Add draft status if active
+    if context.get('draft_active'):
+        prompt += f"- ACTIVE DRAFT: Round {context.get('current_round', 1)}, Pick {context.get('current_pick', 1)}\n"
+        
+        # Add user's roster
+        my_roster = context.get('my_roster', {})
+        if my_roster:
+            roster_summary = []
+            for pos, players in my_roster.items():
+                if players and pos != 'BENCH':
+                    roster_summary.append(f"{pos}: {', '.join([p['name'] for p in players])}")
+            if roster_summary:
+                prompt += f"- Current Roster: {'; '.join(roster_summary)}\n"
+        
+        # Add team analysis
+        if context.get('team_analysis'):
+            analysis = context['team_analysis']
+            prompt += f"- Team Strengths: {', '.join(analysis.get('strengths', []))}\n"
+            prompt += f"- Team Needs: {', '.join(analysis.get('needs', []))}\n"
+        
+        # Add upcoming picks
+        if context.get('upcoming_picks'):
+            picks = context['upcoming_picks'][:3]
+            prompt += f"- Your Next Picks: {', '.join([str(p) for p in picks])}\n"
+    
+    # Add system status
+    if context.get('models_trained'):
+        prompt += "- ML Models: Trained and ready\n"
+    if context.get('projections_ready'):
+        prompt += "- Player Projections: Available\n"
+    
+    # Add top available players
+    if context.get('top_available'):
+        top_players = context['top_available'][:10]  # Top 10
+        prompt += f"- Top Available Players: {', '.join(top_players)}\n"
+    
+    prompt += """
+Guidelines for responses:
+1. Be specific and actionable
+2. Explain your reasoning with data/analysis
+3. Consider the user's league settings and current roster
+4. Provide alternatives when possible
+5. Keep responses concise but comprehensive (2-4 paragraphs)
+6. Ask clarifying questions if you need more information
+7. Use bullet points for multiple recommendations
+8. If draft is active, prioritize draft advice; otherwise focus on general strategy
+
+Always consider current injuries, matchups, and performance trends in your advice.
+If the user needs to set up their draft system or train models, guide them accordingly.
+"""
+    
+    return prompt
+
+@app.route('/api/chat/clear', methods=['POST'])
+def clear_chat():
+    """Clear current chat session"""
+    if 'chat_session_id' in session:
+        conn = sqlite3.connect('fantasy_chat.db')
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM chat_messages WHERE session_id = ?",
+            (session['chat_session_id'],)
+        )
+        
+        # Create new session
+        session['chat_session_id'] = str(uuid.uuid4())
+        cursor.execute(
+            "INSERT INTO chat_sessions (session_id) VALUES (?)",
+            (session['chat_session_id'],)
+        )
+        conn.commit()
+        conn.close()
+    
+    return jsonify({'status': 'success'})
+
+# EXISTING ROUTES (unchanged)
 @app.route('/api/status')
 def api_status():
     """Get system status"""
@@ -51,7 +385,8 @@ def api_status():
         'system_initialized': draft_system is not None,
         'models_trained': models_trained,
         'projections_ready': projections_ready,
-        'league_settings': draft_system.league_settings if draft_system else {}
+        'league_settings': draft_system.league_settings if draft_system else {},
+        'claude_api_available': claude_client is not None  # NEW: Add Claude status
     })
 
 @app.route('/api/train-models', methods=['POST'])
@@ -387,9 +722,11 @@ def api_league_settings():
     global draft_system
     
     if request.method == 'GET':
-        return jsonify({
-            'settings': draft_system.league_settings if draft_system else {}
-        })
+        settings = draft_system.league_settings if draft_system else {}
+        # NEW: Add current week and other settings for chat context
+        if 'current_week' not in settings:
+            settings['current_week'] = 1
+        return jsonify(settings)
     
     elif request.method == 'POST':
         try:
@@ -405,6 +742,10 @@ def api_league_settings():
                 draft_system.league_settings['scoring'] = data['scoring']
             if 'roster_spots' in data:
                 draft_system.league_settings['roster_spots'] = data['roster_spots']
+            # NEW: Add support for additional settings
+            for key in ['current_week', 'qb_spots', 'rb_spots', 'wr_spots', 'te_spots', 'flex_spots', 'k_spots', 'def_spots', 'bench_spots']:
+                if key in data:
+                    draft_system.league_settings[key] = data[key]
             
             return jsonify({
                 'success': True,
@@ -414,8 +755,8 @@ def api_league_settings():
         except Exception as e:
             logger.error(f"Error updating settings: {e}")
             return jsonify({'error': str(e)}), 500
-# Add these new routes to your app.py file
 
+# EXISTING ROUTES CONTINUE (unchanged - manual draft, sleeper sync, etc.)
 @app.route('/api/manual-draft-pick', methods=['POST'])
 def api_manual_draft_pick():
     """Manually enter a draft pick for another team"""
@@ -463,7 +804,6 @@ def api_manual_draft_pick():
         logger.error(f"Error with manual draft pick: {e}")
         return jsonify({'error': str(e)}), 500
 
-
 @app.route('/api/sleeper-sync', methods=['POST'])
 def api_sleeper_sync():
     """Sync draft state with Sleeper API"""
@@ -497,7 +837,6 @@ def api_sleeper_sync():
     except Exception as e:
         logger.error(f"Error syncing with Sleeper: {e}")
         return jsonify({'error': str(e)}), 500
-
 
 @app.route('/api/sleeper-setup', methods=['POST'])
 def api_sleeper_setup():
@@ -541,7 +880,6 @@ def api_sleeper_setup():
         logger.error(f"Error setting up Sleeper draft: {e}")
         return jsonify({'error': str(e)}), 500
 
-
 def fetch_sleeper_draft_picks(draft_id):
     """Fetch draft picks from Sleeper API"""
     import requests
@@ -560,7 +898,6 @@ def fetch_sleeper_draft_picks(draft_id):
         logger.error(f"Error fetching Sleeper picks: {e}")
         return None
 
-
 def fetch_sleeper_league_info(league_id):
     """Fetch league information from Sleeper API"""
     import requests
@@ -578,7 +915,6 @@ def fetch_sleeper_league_info(league_id):
     except Exception as e:
         logger.error(f"Error fetching Sleeper league: {e}")
         return None
-
 
 def fetch_sleeper_draft_info(league_id):
     """Fetch draft information from Sleeper API"""
@@ -601,7 +937,6 @@ def fetch_sleeper_draft_info(league_id):
     except Exception as e:
         logger.error(f"Error fetching Sleeper draft info: {e}")
         return None
-
 
 def setup_draft_from_sleeper(league_info, draft_info, user_id):
     """Setup draft system using Sleeper league data"""
@@ -655,7 +990,6 @@ def setup_draft_from_sleeper(league_info, draft_info, user_id):
     except Exception as e:
         logger.error(f"Error setting up draft from Sleeper: {e}")
         return False
-
 
 def sync_sleeper_picks(sleeper_picks):
     """Sync Sleeper draft picks with our system"""
@@ -712,7 +1046,6 @@ def sync_sleeper_picks(sleeper_picks):
         logger.error(f"Error syncing Sleeper picks: {e}")
         return 0
 
-
 def find_player_by_sleeper_id(sleeper_player_id):
     """Find player in our system by Sleeper player ID"""
     global draft_system
@@ -721,7 +1054,6 @@ def find_player_by_sleeper_id(sleeper_player_id):
     # For now, we'll return None and fall back to name matching
     # In a full implementation, you'd maintain a mapping table
     return None
-
 
 def find_player_by_name(player_name):
     """Find player in our system by name"""
@@ -743,7 +1075,6 @@ def find_player_by_name(player_name):
             return player
     
     return None
-
 
 @app.route('/api/undo-pick', methods=['POST'])
 def api_undo_pick():
@@ -771,7 +1102,6 @@ def api_undo_pick():
         logger.error(f"Error undoing pick: {e}")
         return jsonify({'error': str(e)}), 500
 
-
 @app.route('/api/draft-mode', methods=['POST'])
 def api_set_draft_mode():
     """Set draft input mode (manual vs sleeper vs simulation)"""
@@ -796,15 +1126,14 @@ def api_set_draft_mode():
         logger.error(f"Error setting draft mode: {e}")
         return jsonify({'error': str(e)}), 500
 
-
 # Error handlers
 @app.errorhandler(404)
 def not_found(error):
-    return render_template('error.html', error='Page not found'), 404
+    return render_template('404.html'), 404
 
 @app.errorhandler(500)
 def internal_error(error):
-    return render_template('error.html', error='Internal server error'), 500
+    return render_template('500.html'), 500
 
 if __name__ == '__main__':
     print("=" * 60)
@@ -815,8 +1144,16 @@ if __name__ == '__main__':
     print("Initializing draft system...")
     if initialize_draft_system():
         print("✅ Draft system initialized successfully")
+        
+        # NEW: Check Claude API status
+        if claude_client:
+            print("✅ Claude AI Advisor available")
+        else:
+            print("⚠️ Claude AI Advisor disabled (add ANTHROPIC_API_KEY to enable)")
+        
         print("\n🌐 Starting web server...")
         print("📍 Open your browser to: http://localhost:5000")
+        print("🤖 AI Advisor available at: http://localhost:5000/advice")
         print("⚠️ Press Ctrl+C to stop the server")
         print("=" * 60)
         
