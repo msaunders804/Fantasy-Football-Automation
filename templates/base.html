@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Fantasy Football ML Draft System{% endblock %}</title>
+    
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --success-color: #059669;
+            --warning-color: #d97706;
+            --error-color: #dc2626;
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --border-color: #475569;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* Navigation */
+        .navbar {
+            background: var(--bg-secondary);
+            padding: 1rem 2rem;
+            border-bottom: 2px solid var(--primary-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .navbar h1 {
+            font-size: 1.5rem;
+            background: linear-gradient(45deg, #ffd700, #ff6b35);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 1.5rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-links a:hover, .nav-links a.active {
+            background: var(--primary-color);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .nav-links a.ai-advisor {
+            background: linear-gradient(45deg, #8b5cf6, #06b6d4);
+        }
+
+        /* Main Content */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Grid Layouts */
+        .grid {
+            display: grid;
+            gap: 1.5rem;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        }
+
+        .grid-2 {
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+        }
+
+        .grid-3 {
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--border-color);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(37, 99, 235, 0.15);
+        }
+
+        .card h3 {
+            margin-bottom: 1rem;
+            color: #ffd700;
+        }
+
+        .card h4 {
+            margin-bottom: 0.75rem;
+            color: var(--text-primary);
+        }
+
+        /* Buttons */
+        .btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: var(--secondary-color);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+        }
+
+        .btn:disabled {
+            background: #6b7280;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-success {
+            background: var(--success-color);
+        }
+
+        .btn-warning {
+            background: var(--warning-color);
+        }
+
+        .btn-error {
+            background: var(--error-color);
+        }
+
+        .btn-ai {
+            background: linear-gradient(45deg, #8b5cf6, #06b6d4);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        /* Alerts */
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: rgba(5, 150, 105, 0.2);
+            border: 1px solid var(--success-color);
+            color: #10b981;
+        }
+
+        .alert-warning {
+            background: rgba(217, 119, 6, 0.2);
+            border: 1px solid var(--warning-color);
+            color: #f59e0b;
+        }
+
+        .alert-error {
+            background: rgba(220, 38, 38, 0.2);
+            border: 1px solid var(--error-color);
+            color: #ef4444;
+        }
+
+        /* Status Indicators */
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-success {
+            background: var(--success-color);
+        }
+
+        .status-warning {
+            background: var(--warning-color);
+        }
+
+        .status-error {
+            background: var(--error-color);
+        }
+
+        /* Loading Spinner */
+        .loading {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid var(--border-color);
+            border-top: 3px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 0.95rem;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        select.form-control {
+            cursor: pointer;
+        }
+
+        /* Tables */
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--bg-card);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .table th,
+        .table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .table th {
+            background: var(--bg-secondary);
+            font-weight: 600;
+            color: #ffd700;
+        }
+
+        .table tbody tr:hover {
+            background: rgba(37, 99, 235, 0.1);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .navbar {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .nav-links {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .container {
+                padding: 1rem;
+            }
+
+            .grid-2,
+            .grid-3 {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <h1>🏈 Fantasy Football ML Draft System</h1>
+        <ul class="nav-links">
+            <li><a href="/" data-page="home">Setup</a></li>
+            <li><a href="/rankings" data-page="rankings">Rankings</a></li>
+            <li><a href="/draft" data-page="draft">Draft</a></li>
+            <li><a href="/advice" data-page="advice" class="ai-advisor">AI Advisor</a></li>
+            <li><a href="/settings" data-page="settings">Settings</a></li>
+        </ul>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Common JavaScript -->
+    <script>
+        // Global variables
+        let systemStatus = {};
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            setActiveNavLink();
+            loadSystemStatus();
+        });
+
+        // Set active navigation link
+        function setActiveNavLink() {
+            const currentPage = window.location.pathname;
+            const navLinks = document.querySelectorAll('.nav-links a');
+            
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === currentPage) {
+                    link.classList.add('active');
+                }
+            });
+        }
+
+        // Load system status
+        async function loadSystemStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                systemStatus = data;
+                
+                // Call page-specific status update if it exists
+                if (typeof window.onSystemStatusUpdate === 'function') {
+                    window.onSystemStatusUpdate(data);
+                }
+            } catch (error) {
+                console.error('Error loading system status:', error);
+            }
+        }
+
+        // Training functions (used on multiple pages)
+        async function trainModels() {
+            const btn = document.getElementById('train-models-btn');
+            const statusDiv = document.getElementById('training-status');
+            
+            if (!btn || !statusDiv) return;
+            
+            btn.disabled = true;
+            btn.textContent = 'Training...';
+            statusDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>Training ML models...</p></div>';
+            
+            try {
+                const response = await fetch('/api/train-models', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                    await loadSystemStatus(); // Refresh status
+                } else {
+                    statusDiv.innerHTML = `<div class="alert alert-error">Error: ${data.error}</div>`;
+                }
+            } catch (error) {
+                console.error('Error training models:', error);
+                statusDiv.innerHTML = '<div class="alert alert-error">Network error occurred</div>';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Train Models';
+            }
+        }
+
+        async function generateProjections() {
+            const btn = document.getElementById('generate-projections-btn');
+            const statusDiv = document.getElementById('projections-status');
+            
+            if (!btn || !statusDiv) return;
+            
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            statusDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>Generating player projections...</p></div>';
+            
+            try {
+                const response = await fetch('/api/generate-projections', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                    await loadSystemStatus(); // Refresh status
+                } else {
+                    statusDiv.innerHTML = `<div class="alert alert-error">Error: ${data.error}</div>`;
+                }
+            } catch (error) {
+                console.error('Error generating projections:', error);
+                statusDiv.innerHTML = '<div class="alert alert-error">Network error occurred</div>';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate 2025 Projections';
+            }
+        }
+
+        // Utility functions
+        function formatNumber(num) {
+            if (num === null || num === undefined) return 'N/A';
+            return typeof num === 'number' ? num.toFixed(1) : num;
+        }
+
+        function getPositionColor(position) {
+            const colors = {
+                'QB': '#8b5cf6',
+                'RB': '#06b6d4', 
+                'WR': '#10b981',
+                'TE': '#f59e0b',
+                'K': '#6b7280',
+                'DEF': '#ef4444'
+            };
+            return colors[position] || '#6b7280';
+        }
+
+        function getTierBadge(tier) {
+            const tierColors = {
+                1: 'background: linear-gradient(45deg, #ffd700, #ffed4e)',
+                2: 'background: linear-gradient(45deg, #c0c0c0, #e8e8e8)',
+                3: 'background: linear-gradient(45deg, #cd7f32, #deb887)',
+                4: 'background: var(--primary-color)',
+                5: 'background: var(--success-color)'
+            };
+            
+            const style = tierColors[tier] || 'background: var(--bg-secondary)';
+            return `<span class="tier-badge" style="${style}; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;">Tier ${tier}</span>`;
+        }
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,518 @@
+{% extends "base.html" %}
+
+{% block title %}Player Rankings - Fantasy Football ML Draft System{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Player Rankings</h2>
+    <p>ML-generated player rankings with Value-Based Drafting (VBD) scores and tier classifications.</p>
+    
+    <!-- Status Check -->
+    <div id="rankings-status">
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Loading rankings...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Filters and Controls -->
+<div class="card" id="rankings-controls" style="display: none;">
+    <div class="grid grid-2">
+        <div>
+            <div class="form-group">
+                <label for="position-filter">Filter by Position:</label>
+                <select id="position-filter" class="form-control" onchange="loadRankings()">
+                    <option value="">All Positions</option>
+                    <option value="QB">Quarterback (QB)</option>
+                    <option value="RB">Running Back (RB)</option>
+                    <option value="WR">Wide Receiver (WR)</option>
+                    <option value="TE">Tight End (TE)</option>
+                </select>
+            </div>
+        </div>
+        <div>
+            <div class="form-group">
+                <label for="per-page">Players per page:</label>
+                <select id="per-page" class="form-control" onchange="loadRankings()">
+                    <option value="25">25</option>
+                    <option value="50" selected>50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    
+    <div class="grid grid-3">
+        <button class="btn" onclick="loadRankings()">Refresh Rankings</button>
+        <button class="btn btn-secondary" onclick="exportRankings()">Export CSV</button>
+        <button class="btn btn-warning" onclick="showStatsModal()">View Statistics</button>
+    </div>
+</div>
+
+<!-- Rankings Table -->
+<div class="card" id="rankings-table-container" style="display: none;">
+    <div class="table-responsive">
+        <table class="table" id="rankings-table">
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Player</th>
+                    <th>Position</th>
+                    <th>Projected Points</th>
+                    <th>VBD Score</th>
+                    <th>Tier</th>
+                    <th>Draft Grade</th>
+                </tr>
+            </thead>
+            <tbody id="rankings-tbody">
+                <!-- Rankings will be populated here -->
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Pagination -->
+    <div id="pagination" class="pagination-container">
+        <!-- Pagination controls will be added here -->
+    </div>
+</div>
+
+<!-- Loading Overlay for Refreshes -->
+<div id="loading-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center;">
+    <div class="loading">
+        <div class="spinner" style="width: 48px; height: 48px;"></div>
+        <p style="margin-top: 1rem;">Loading rankings...</p>
+    </div>
+</div>
+
+<!-- Stats Modal (hidden by default) -->
+<div id="stats-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1001;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-card); padding: 2rem; border-radius: 12px; max-width: 600px; width: 90%;">
+        <h3>Rankings Statistics</h3>
+        <div id="stats-content">
+            <!-- Stats will be populated here -->
+        </div>
+        <button class="btn" onclick="hideStatsModal()" style="margin-top: 1rem;">Close</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+let currentPosition = '';
+let currentPerPage = 50;
+let allRankings = [];
+
+// Initialize rankings page
+document.addEventListener('DOMContentLoaded', function() {
+    checkRankingsStatus();
+});
+
+async function checkRankingsStatus() {
+    try {
+        const response = await fetch('/api/status');
+        const status = await response.json();
+        
+        const statusDiv = document.getElementById('rankings-status');
+        
+        if (!status.projections_ready) {
+            statusDiv.innerHTML = `
+                <div class="alert alert-warning">
+                    <h4>Rankings Not Ready</h4>
+                    <p>Player projections need to be generated first.</p>
+                    <div style="margin-top: 1rem;">
+                        ${!status.models_trained ? '<button class="btn" onclick="trainModels()" style="margin-right: 1rem;">Train Models First</button>' : ''}
+                        <button class="btn" onclick="generateProjections()">Generate Projections</button>
+                    </div>
+                </div>
+            `;
+        } else {
+            statusDiv.style.display = 'none';
+            document.getElementById('rankings-controls').style.display = 'block';
+            document.getElementById('rankings-table-container').style.display = 'block';
+            loadRankings();
+        }
+    } catch (error) {
+        console.error('Error checking status:', error);
+        document.getElementById('rankings-status').innerHTML = 
+            '<div class="alert alert-error">Error checking system status</div>';
+    }
+}
+
+async function loadRankings() {
+    const position = document.getElementById('position-filter').value;
+    const perPage = document.getElementById('per-page').value;
+    
+    currentPosition = position;
+    currentPerPage = parseInt(perPage);
+    currentPage = 1; // Reset to first page when filters change
+    
+    await fetchRankings();
+}
+
+async function fetchRankings() {
+    const tbody = document.getElementById('rankings-tbody');
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;"><div class="loading"><div class="spinner"></div><p>Loading...</p></div></td></tr>';
+    
+    try {
+        const params = new URLSearchParams({
+            page: currentPage,
+            per_page: currentPerPage
+        });
+        
+        if (currentPosition) {
+            params.append('position', currentPosition);
+        }
+        
+        const response = await fetch(`/api/rankings?${params}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align: center;"><div class="alert alert-error">${data.error}</div></td></tr>`;
+            return;
+        }
+        
+        displayRankings(data.players);
+        updatePagination(data);
+        
+    } catch (error) {
+        console.error('Error loading rankings:', error);
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;"><div class="alert alert-error">Error loading rankings</div></td></tr>';
+    }
+}
+
+function displayRankings(players) {
+    const tbody = document.getElementById('rankings-tbody');
+    
+    if (!players || players.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No players found</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = players.map((player, index) => {
+        const rank = ((currentPage - 1) * currentPerPage) + index + 1;
+        return `
+            <tr>
+                <td><strong>${rank}</strong></td>
+                <td>
+                    <div style="font-weight: 600;">${player.name}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary);">${player.team || 'N/A'}</div>
+                </td>
+                <td>
+                    <span style="background: ${getPositionColor(player.position)}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600;">
+                        ${player.position}
+                    </span>
+                </td>
+                <td><strong>${formatNumber(player.projected_points)}</strong></td>
+                <td>
+                    <div style="font-weight: 600; color: ${player.vbd_score > 0 ? '#10b981' : '#ef4444'};">
+                        ${formatNumber(player.vbd_score)}
+                    </div>
+                </td>
+                <td>${getTierBadge(player.tier)}</td>
+                <td>
+                    <span style="background: ${getGradeColor(player.draft_grade)}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600;">
+                        ${player.draft_grade}
+                    </span>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function updatePagination(data) {
+    const paginationDiv = document.getElementById('pagination');
+    const totalPages = Math.ceil(data.total / currentPerPage);
+    
+    if (totalPages <= 1) {
+        paginationDiv.innerHTML = '';
+        return;
+    }
+    
+    let paginationHtml = '<div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 1rem;">';
+    
+    // Previous button
+    if (data.has_prev) {
+        paginationHtml += `<button class="btn btn-secondary" onclick="changePage(${currentPage - 1})">Previous</button>`;
+    }
+    
+    // Page numbers
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, currentPage + 2);
+    
+    if (startPage > 1) {
+        paginationHtml += `<button class="btn btn-secondary" onclick="changePage(1)">1</button>`;
+        if (startPage > 2) {
+            paginationHtml += '<span>...</span>';
+        }
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const isActive = i === currentPage;
+        paginationHtml += `<button class="btn ${isActive ? 'btn-primary' : 'btn-secondary'}" onclick="changePage(${i})">${i}</button>`;
+    }
+    
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            paginationHtml += '<span>...</span>';
+        }
+        paginationHtml += `<button class="btn btn-secondary" onclick="changePage(${totalPages})">${totalPages}</button>`;
+    }
+    
+    // Next button
+    if (data.has_next) {
+        paginationHtml += `<button class="btn btn-secondary" onclick="changePage(${currentPage + 1})">Next</button>`;
+    }
+    
+    paginationHtml += '</div>';
+    paginationHtml += `<div style="text-align: center; margin-top: 0.5rem; color: var(--text-secondary);">Showing ${((currentPage - 1) * currentPerPage) + 1}-${Math.min(currentPage * currentPerPage, data.total)} of ${data.total} players</div>`;
+    
+    paginationDiv.innerHTML = paginationHtml;
+}
+
+async function changePage(page) {
+    currentPage = page;
+    await fetchRankings();
+}
+
+function getGradeColor(grade) {
+    const gradeColors = {
+        'A+': '#10b981',
+        'A': '#059669',
+        'A-': '#047857',
+        'B+': '#0ea5e9',
+        'B': '#0284c7',
+        'B-': '#0369a1',
+        'C+': '#f59e0b',
+        'C': '#d97706',
+        'C-': '#b45309',
+        'D': '#ef4444',
+        'F': '#dc2626'
+    };
+    return gradeColors[grade] || '#6b7280';
+}
+
+async function exportRankings() {
+    try {
+        // For simplicity, we'll export current page data
+        // In a full implementation, you'd export all data
+        const params = new URLSearchParams({
+            page: 1,
+            per_page: 1000 // Get more data for export
+        });
+        
+        if (currentPosition) {
+            params.append('position', currentPosition);
+        }
+        
+        const response = await fetch(`/api/rankings?${params}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            alert('Error exporting rankings: ' + data.error);
+            return;
+        }
+        
+        // Convert to CSV
+        const csvContent = convertToCSV(data.players);
+        downloadCSV(csvContent, `fantasy_rankings_${currentPosition || 'all'}.csv`);
+        
+    } catch (error) {
+        console.error('Export error:', error);
+        alert('Error exporting rankings');
+    }
+}
+
+function convertToCSV(players) {
+    const headers = ['Rank', 'Name', 'Team', 'Position', 'Projected Points', 'VBD Score', 'Tier', 'Draft Grade'];
+    const rows = players.map((player, index) => [
+        index + 1,
+        player.name,
+        player.team || '',
+        player.position,
+        player.projected_points,
+        player.vbd_score,
+        player.tier,
+        player.draft_grade
+    ]);
+    
+    const csvContent = [headers, ...rows]
+        .map(row => row.map(cell => `"${cell}"`).join(','))
+        .join('\n');
+    
+    return csvContent;
+}
+
+function downloadCSV(content, filename) {
+    const blob = new Blob([content], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+}
+
+async function showStatsModal() {
+    try {
+        const response = await fetch('/api/rankings?per_page=1000');
+        const data = await response.json();
+        
+        if (data.error) {
+            alert('Error loading statistics: ' + data.error);
+            return;
+        }
+        
+        const stats = calculateStats(data.players);
+        displayStats(stats);
+        document.getElementById('stats-modal').style.display = 'block';
+        
+    } catch (error) {
+        console.error('Stats error:', error);
+        alert('Error loading statistics');
+    }
+}
+
+function calculateStats(players) {
+    const positionCounts = {};
+    const tierCounts = {};
+    const gradeCounts = {};
+    let totalProjected = 0;
+    let totalVBD = 0;
+    
+    players.forEach(player => {
+        // Position counts
+        positionCounts[player.position] = (positionCounts[player.position] || 0) + 1;
+        
+        // Tier counts
+        tierCounts[player.tier] = (tierCounts[player.tier] || 0) + 1;
+        
+        // Grade counts
+        gradeCounts[player.draft_grade] = (gradeCounts[player.draft_grade] || 0) + 1;
+        
+        // Totals
+        totalProjected += player.projected_points || 0;
+        totalVBD += player.vbd_score || 0;
+    });
+    
+    return {
+        totalPlayers: players.length,
+        positionCounts,
+        tierCounts,
+        gradeCounts,
+        avgProjected: totalProjected / players.length,
+        avgVBD: totalVBD / players.length,
+        topPlayer: players[0],
+        topByPosition: getTopByPosition(players)
+    };
+}
+
+function getTopByPosition(players) {
+    const topByPos = {};
+    players.forEach(player => {
+        if (!topByPos[player.position] || player.vbd_score > topByPos[player.position].vbd_score) {
+            topByPos[player.position] = player;
+        }
+    });
+    return topByPos;
+}
+
+function displayStats(stats) {
+    const content = document.getElementById('stats-content');
+    
+    let html = `
+        <div class="grid grid-2" style="margin-bottom: 1rem;">
+            <div>
+                <h4>Overview</h4>
+                <p><strong>Total Players:</strong> ${stats.totalPlayers}</p>
+                <p><strong>Avg Projected Points:</strong> ${formatNumber(stats.avgProjected)}</p>
+                <p><strong>Avg VBD Score:</strong> ${formatNumber(stats.avgVBD)}</p>
+            </div>
+            <div>
+                <h4>Top Overall</h4>
+                <p><strong>${stats.topPlayer?.name || 'N/A'}</strong></p>
+                <p>${stats.topPlayer?.position || ''} - ${formatNumber(stats.topPlayer?.vbd_score)} VBD</p>
+            </div>
+        </div>
+        
+        <div class="grid grid-2">
+            <div>
+                <h4>By Position</h4>
+    `;
+    
+    Object.entries(stats.positionCounts).forEach(([pos, count]) => {
+        html += `<p><strong>${pos}:</strong> ${count} players</p>`;
+    });
+    
+    html += `
+            </div>
+            <div>
+                <h4>Top by Position</h4>
+    `;
+    
+    Object.entries(stats.topByPosition).forEach(([pos, player]) => {
+        html += `<p><strong>${pos}:</strong> ${player.name} (${formatNumber(player.vbd_score)})</p>`;
+    });
+    
+    html += `
+            </div>
+        </div>
+        
+        <div style="margin-top: 1rem;">
+            <h4>Tier Distribution</h4>
+            <div class="grid grid-3">
+    `;
+    
+    Object.entries(stats.tierCounts).forEach(([tier, count]) => {
+        html += `<div>Tier ${tier}: ${count}</div>`;
+    });
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    content.innerHTML = html;
+}
+
+function hideStatsModal() {
+    document.getElementById('stats-modal').style.display = 'none';
+}
+
+// Override system status update for this page
+window.onSystemStatusUpdate = function(status) {
+    if (status.projections_ready && document.getElementById('rankings-status').style.display !== 'none') {
+        checkRankingsStatus();
+    }
+};
+</script>
+
+<style>
+.table-responsive {
+    overflow-x: auto;
+}
+
+.pagination-container {
+    margin-top: 1rem;
+}
+
+@media (max-width: 768px) {
+    .table th,
+    .table td {
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    .table th:nth-child(4),
+    .table td:nth-child(4),
+    .table th:nth-child(5),
+    .table td:nth-child(5) {
+        display: none;
+    }
+}
+</style>
+{% endblock %}
